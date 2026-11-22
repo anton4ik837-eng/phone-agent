@@ -1,7 +1,7 @@
 # Phone Agent — управление телефоном без ПК
 
 - Репозиторий: https://github.com/anton4ik837-eng/phone-agent
-- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.2.0/phone-agent.apk
+- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.2.1/phone-agent.apk
 
 Android-приложение, которое само является MCP-сервером. OpenCode запускается прямо на устройстве (Termux) и подключается к приложению по `http://127.0.0.1:8765/mcp`. ПК в контуре отсутствует.
 
@@ -50,6 +50,8 @@ Android-приложение, которое само является MCP-се�
 Termux после этого нужен только для того, чтобы держать запущенным `opencode serve`.
 
 ## Все нужные команды
+
+Это команды **для терминала Termux**, их нельзя вводить в чат приложения. В чат пишутся только запросы агенту на естественном языке. В приложении есть кнопки «Все нужные команды ДЛЯ TERMUX», «Копировать команды для Termux» и «Открыть Termux».
 
 ```sh
 # 1. Termux из F-Droid или GitHub releases (не из Play Store)

@@ -70,7 +70,9 @@ class MainActivity : Activity() {
         root.addView(serverInput)
         root.addView(passwordInput)
         root.addView(button("Подключиться / новая сессия") { connect() })
-        root.addView(button("Все нужные команды и примеры") { appendChat(COMMANDS) })
+        root.addView(button("Все нужные команды ДЛЯ TERMUX") { appendChat(COMMANDS) })
+        root.addView(button("Копировать команды для Termux") { copySetupCommands() })
+        root.addView(button("Открыть Termux") { openTermux() })
 
         val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         quick.addView(button("Экран") { sendCommand("Посмотри, что сейчас на экране, и опиши") })
@@ -135,13 +137,41 @@ class MainActivity : Activity() {
                     toast("OpenCode подключён")
                 }
             } catch (t: Throwable) {
-                runOnUiThread { appendChat("Не удалось подключиться: ${t.message}\nЗапусти в Termux: opencode serve") }
+                runOnUiThread {
+                    appendChat(
+                        "Не удалось подключиться: ${t.message}\n" +
+                        "Открой Termux (кнопка выше) и выполни: opencode serve\n" +
+                        "Затем впиши напечатанные адрес и пароль в поля и нажми «Подключиться» ещё раз."
+                    )
+                }
             }
         }.start()
     }
 
+    private fun copySetupCommands() {
+        val manager = getSystemService(android.content.ClipboardManager::class.java)
+        manager?.setPrimaryClip(android.content.ClipData.newPlainText("Phone Agent — команды Termux", SETUP_COMMANDS))
+        toast("Команды скопированы — вставь их в Termux")
+    }
+
+    private fun openTermux() {
+        val packages = listOf("com.termux", "com.termux.x11")
+        for (pkg in packages) {
+            val intent = packageManager.getLaunchIntentForPackage(pkg)
+            if (intent != null) {
+                startActivity(intent)
+                return
+            }
+        }
+        toast("Termux не найден — установи его из F-Droid")
+    }
+
     private fun sendCommand(text: String) {
         if (text.isBlank()) return
+        if (Regex("""^\s*(curl|pkg|mkdir|opencode|cd|ls|bash|apt)\b""").containsMatchIn(text)) {
+            appendChat("Это команда для Termux, а не для агента. Нажми «Открыть Termux» и выполни её там (или «Копировать команды для Termux»).")
+            return
+        }
         appendChat("Ты: $text")
         commandInput.setText("")
         Thread {
@@ -273,7 +303,7 @@ class MainActivity : Activity() {
             appendLine("Скриншоты: ${if (ScreenCaptureHolder.permissionIntent != null) "РАЗРЕШЕНЫ" else "НЕТ"}")
             appendLine("MCP: http://127.0.0.1:8765/mcp (${if (McpServer.isRunning()) "работает" else "остановлен"})")
             appendLine()
-            appendLine("Команда пишется в поле «Напиши команду» ниже — Termux не нужен.")
+            appendLine("Команды агента — в поле ниже. Termux нужен только для `opencode serve`.")
         }
     }
 
@@ -286,18 +316,21 @@ class MainActivity : Activity() {
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
     companion object {
-        private const val COMMANDS = """ВСЕ НУЖНЫЕ КОМАНДЫ
-
-Termux (один раз, если ещё не установлен OpenCode):
-1. Установить Termux из F-Droid или GitHub releases (не из Play Store).
+        private val SETUP_COMMANDS = """1. Установить Termux из F-Droid или GitHub releases (не из Play Store).
 2. curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-setup.sh | bash
 3. pkg install opencode
 4. mkdir -p ~/.config/opencode
 5. curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json
 6. opencode mcp list   -> должно быть: phone connected
-7. opencode serve      -> напечатает адрес и пароль, впиши их в поля выше
+7. opencode serve      -> напечатает адрес и пароль, впиши их в поля выше"""
 
-ПРИМЕРЫ КОМАНД ДЛЯ OPENCODE:
+        private val COMMANDS = """ВНИМАНИЕ: ЭТИ КОМАНДЫ ВВОДЯТСЯ В TERMUX, НЕ В ЧАТ!
+
+$SETUP_COMMANDS
+
+————————————————————
+
+Примеры команд ДЛЯ ЧАТА (после подключения):
 - Посмотри, что сейчас на экране, и опиши.
 - Прочитай активные уведомления.
 - Открой Telegram и скажи, что видишь.

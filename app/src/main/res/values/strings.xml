@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_description">Phone Agent: позволяет OpenCode управлять экраном устройства — тапы, свайпы, ввод текста и чтение содержимого экрана.</string>
+</resources>

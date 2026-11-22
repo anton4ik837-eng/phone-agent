@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "google": {
+      "settings": {
+        "baseURL": "https://throbbing-unit-5449.anton4ik837.workers.dev"
+      }
+    }
+  },
+  "model": "google/gemini-3.5-flash-lite",
+  "mcp": {
+    "servers": {
+      "phone": {
+        "type": "remote",
+        "url": "http://127.0.0.1:8765/mcp",
+        "oauth": false
+      }
+    }
+  }
+}

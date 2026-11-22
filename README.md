@@ -1,5 +1,8 @@
 # Phone Agent — управление телефоном без ПК
 
+- Репозиторий: https://github.com/anton4ik837-eng/phone-agent
+- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.1.0/phone-agent.apk
+
 Android-приложение, которое само является MCP-сервером. OpenCode запускается прямо на устройстве (Termux) и подключается к приложению по `http://127.0.0.1:8765/mcp`. ПК в контуре отсутствует.
 
 Готовый APK: `C:\Users\Anton\Dev\PhoneAgent\phone-agent.apk` (копия `app\build\outputs\apk\debug\app-debug.apk`). Один и тот же APK ставится на POCO X7 Pro и на Lenovo Xiaoxin Pad Pro GT.

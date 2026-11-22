@@ -72,6 +72,10 @@ class MainActivity : Activity() {
         root.addView(button("Подключиться / новая сессия") { connect() })
         root.addView(button("Все нужные команды ДЛЯ TERMUX") { appendChat(COMMANDS) })
         root.addView(button("Копировать команды для Termux") { copySetupCommands() })
+        root.addView(button("Копировать: repo-setup") { copyText(CMD_REPO) })
+        root.addView(button("Копировать: pkg install") { copyText(CMD_INSTALL) })
+        root.addView(button("Копировать: конфиг") { copyText(CMD_MKDIR + "\n" + CMD_CONFIG) })
+        root.addView(button("Копировать: serve") { copyText(CMD_SERVE) })
         root.addView(button("Открыть Termux") { openTermux() })
 
         val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -148,22 +152,32 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun copySetupCommands() {
+    private fun copyText(text: String) {
         val manager = getSystemService(android.content.ClipboardManager::class.java)
-        manager?.setPrimaryClip(android.content.ClipData.newPlainText("Phone Agent — команды Termux", SETUP_COMMANDS))
-        toast("Команды скопированы — вставь их в Termux")
+        manager?.setPrimaryClip(android.content.ClipData.newPlainText("Phone Agent", text))
+        toast("Скопировано — вставь в Termux")
+    }
+
+    private fun copySetupCommands() {
+        copyText(listOf(CMD_REPO, CMD_INSTALL, CMD_MKDIR, CMD_CONFIG, CMD_MCP, CMD_SERVE)
+            .joinToString("\n"))
     }
 
     private fun openTermux() {
-        val packages = listOf("com.termux", "com.termux.x11")
-        for (pkg in packages) {
-            val intent = packageManager.getLaunchIntentForPackage(pkg)
-            if (intent != null) {
+        val installed = packageManager.getInstalledApplications(0)
+            .map { it.packageName }
+            .filter { it.contains("termux", ignoreCase = true) }
+        val candidates = (listOf("com.termux", "com.termux.x11") + installed).distinct()
+        for (pkg in candidates) {
+            val intent = packageManager.getLaunchIntentForPackage(pkg) ?: continue
+            try {
                 startActivity(intent)
                 return
+            } catch (_: Throwable) {
+                // try the next candidate
             }
         }
-        toast("Termux не найден — установи его из F-Droid")
+        toast("Не нашёл Termux. Установи его из F-Droid или GitHub releases")
     }
 
     private fun sendCommand(text: String) {
@@ -316,13 +330,22 @@ class MainActivity : Activity() {
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
     companion object {
+        private const val CMD_REPO = "curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-setup.sh | bash"
+        private const val CMD_INSTALL = "pkg install opencode"
+        private const val CMD_MKDIR = "mkdir -p ~/.config/opencode"
+        private const val CMD_CONFIG = "curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json"
+        private const val CMD_MCP = "opencode mcp list"
+        private const val CMD_SERVE = "opencode serve"
+
         private val SETUP_COMMANDS = """1. Установить Termux из F-Droid или GitHub releases (не из Play Store).
-2. curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-setup.sh | bash
-3. pkg install opencode
-4. mkdir -p ~/.config/opencode
-5. curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json
-6. opencode mcp list   -> должно быть: phone connected
-7. opencode serve      -> напечатает адрес и пароль, впиши их в поля выше"""
+2. $CMD_REPO
+3. $CMD_INSTALL
+4. $CMD_MKDIR
+5. $CMD_CONFIG
+6. $CMD_MCP   -> должно быть: phone connected
+7. $CMD_SERVE      -> напечатает адрес и пароль, впиши их в поля выше
+
+Вставляй в Termux ПО ОДНОЙ СТРОКЕ. Кнопки выше копируют каждую команду отдельно — так ссылка не разорвётся."""
 
         private val COMMANDS = """ВНИМАНИЕ: ЭТИ КОМАНДЫ ВВОДЯТСЯ В TERMUX, НЕ В ЧАТ!
 

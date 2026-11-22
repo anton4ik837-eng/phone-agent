@@ -37,45 +37,72 @@ class OpenCodeClient(private val baseUrl: String, private val password: String) 
         return "OpenCode доступен. Сессий: ${sessions.length()}"
     }
 
+    fun mcpStatus(): String {
+        val json = JSONObject(request("GET", "/api/mcp"))
+        val servers = json.optJSONArray("data") ?: JSONArray()
+        if (servers.length() == 0) return "MCP-серверов нет — проверь ~/.config/opencode/opencode.json"
+        val sb = StringBuilder()
+        for (i in 0 until servers.length()) {
+            val server = servers.optJSONObject(i) ?: continue
+            sb.append(server.optString("name", "?")).append(": ")
+                .append(server.optString("status", "?")).append('\n')
+        }
+        return sb.toString().trimEnd()
+    }
+
     fun createSession(): String {
         val json = JSONObject(request("POST", "/api/session", "{}"))
         return json.getJSONObject("data").getString("id")
     }
 
-    /** Sends a prompt and polls for the assistant answer. Returns text + tool calls. */
+    /** Sends a prompt and polls for NEW assistant messages (by id, not by timestamp). */
     fun prompt(sessionId: String, text: String): String {
-        request("POST", "/api/session/$sessionId/prompt", JSONObject().put("text", text).toString())
-        val startedAt = System.currentTimeMillis() - 2000
-        val deadline = startedAt + 150000
+        val before = JSONObject(request("GET", "/api/session/$sessionId/message"))
+            .optJSONArray("data") ?: JSONArray()
+        val knownIds = HashSet<String>()
+        for (i in 0 until before.length()) {
+            knownIds.add(before.optJSONObject(i)?.optString("id", "") ?: "")
+        }
 
+        request("POST", "/api/session/$sessionId/prompt", JSONObject().put("text", text).toString())
+
+        val deadline = System.currentTimeMillis() + 120000
+        var partial = ""
         while (System.currentTimeMillis() < deadline) {
             Thread.sleep(1500)
             val messages = JSONObject(request("GET", "/api/session/$sessionId/message"))
                 .optJSONArray("data") ?: JSONArray()
             val answer = StringBuilder()
             var finished = false
+            var errorText = ""
+
             for (i in 0 until messages.length()) {
                 val message = messages.optJSONObject(i) ?: continue
+                val id = message.optString("id", "")
+                if (knownIds.contains(id)) continue
                 if (message.optString("type") != "assistant") continue
-                val time = message.optJSONObject("time")
-                val created = time?.optLong("created") ?: 0L
-                if (created < startedAt) continue
+
                 val content = message.optJSONArray("content") ?: JSONArray()
                 for (j in 0 until content.length()) {
                     val part = content.optJSONObject(j) ?: continue
                     when (part.optString("type")) {
                         "text" -> answer.append(part.optString("text", "")).append('\n')
-                        "tool" -> {
-                            val tool = part.optString("tool", "tool")
-                            val state = part.optString("state", "")
-                            answer.append("[вызов инструмента: $tool, $state]\n")
-                        }
+                        "tool" -> answer.append("[инструмент: ").append(part.optString("tool", "?")).append("]\n")
                     }
                 }
+                val error = message.optJSONObject("error")
+                if (error != null) errorText = error.toString().take(600)
+                val time = message.optJSONObject("time")
                 if (time?.has("completed") == true || message.has("finish")) finished = true
             }
-            if (answer.isNotBlank() && finished) return answer.toString().trim()
+
+            if (errorText.isNotBlank()) return "Ошибка OpenCode: $errorText"
+            if (answer.isNotBlank()) {
+                partial = answer.toString().trim()
+                if (finished) return partial
+            }
         }
-        return "Ответ не получен за 150 секунд. Проверь, что в Termux запущен `opencode serve`, а MCP показывает `phone connected`."
+        return if (partial.isNotBlank()) partial
+               else "Нет ответа за 120 секунд. Проверь, что в Termux живёт `opencode serve`, а модель авторизована (в чате OpenCode нет ошибки про key/login)."
     }
 }

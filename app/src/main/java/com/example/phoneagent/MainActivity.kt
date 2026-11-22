@@ -70,6 +70,7 @@ class MainActivity : Activity() {
         root.addView(serverInput)
         root.addView(passwordInput)
         root.addView(button("Подключиться / новая сессия") { connect() })
+        root.addView(button("Проверить MCP в OpenCode") { checkMcp() })
         root.addView(button("Все нужные команды ДЛЯ TERMUX") { appendChat(COMMANDS) })
         root.addView(button("Копировать команды для Termux") { copySetupCommands() })
         root.addView(button("Копировать: repo-setup") { copyText(CMD_REPO) })
@@ -121,6 +122,18 @@ class MainActivity : Activity() {
         setOnClickListener { click() }
     }
 
+    private fun checkMcp() {
+        appendChat("Проверяю MCP...")
+        Thread {
+            try {
+                val result = client().mcpStatus()
+                runOnUiThread { appendChat("MCP в OpenCode:\n$result") }
+            } catch (t: Throwable) {
+                runOnUiThread { appendChat("MCP проверить не удалось: ${t.message}") }
+            }
+        }.start()
+    }
+
     private fun client(): OpenCodeClient {
         val url = serverInput.text.toString().ifBlank { "http://127.0.0.1:4096" }
         val password = passwordInput.text.toString()
@@ -132,12 +145,14 @@ class MainActivity : Activity() {
         appendChat("Подключение к OpenCode...")
         Thread {
             try {
-                val result = client().check()
-                val sid = client().createSession()
+                val currentClient = client()
+                val result = currentClient.check()
+                runOnUiThread { appendChat("$result. Создаю сессию...") }
+                val sid = currentClient.createSession()
                 sessionId = sid
                 prefs.edit().putString("oc_session", sid).apply()
                 runOnUiThread {
-                    appendChat("$result. Новая сессия создана. Пиши команду ниже.")
+                    appendChat("Сессия $sid готова. Пиши команду ниже.")
                     toast("OpenCode подключён")
                 }
             } catch (t: Throwable) {
@@ -187,6 +202,7 @@ class MainActivity : Activity() {
             return
         }
         appendChat("Ты: $text")
+        appendChat("Ожидаю ответ OpenCode...")
         commandInput.setText("")
         Thread {
             try {
@@ -333,7 +349,7 @@ class MainActivity : Activity() {
         private const val CMD_REPO = "curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-setup.sh | bash"
         private const val CMD_INSTALL = "pkg install opencode"
         private const val CMD_MKDIR = "mkdir -p ~/.config/opencode"
-        private const val CMD_CONFIG = "curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json"
+        private const val CMD_CONFIG = "curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json\ncurl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-instructions.md -o ~/.config/opencode/phone-instructions.md"
         private const val CMD_MCP = "opencode mcp list"
         private const val CMD_SERVE = "opencode serve"
 

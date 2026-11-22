@@ -1,7 +1,7 @@
 # Phone Agent — управление телефоном без ПК
 
 - Репозиторий: https://github.com/anton4ik837-eng/phone-agent
-- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.2.2/phone-agent.apk
+- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.2.3/phone-agent.apk
 
 Android-приложение, которое само является MCP-сервером. OpenCode запускается прямо на устройстве (Termux) и подключается к приложению по `http://127.0.0.1:8765/mcp`. ПК в контуре отсутствует.
 
@@ -59,6 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-
 pkg install opencode
 mkdir -p ~/.config/opencode
 curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json
+curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-instructions.md -o ~/.config/opencode/phone-instructions.md
 opencode mcp list      # должно быть: phone connected
 opencode serve         # адрес и пароль вписать в приложение
 ```

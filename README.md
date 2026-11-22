@@ -1,7 +1,7 @@
 # Phone Agent — управление телефоном без ПК
 
 - Репозиторий: https://github.com/anton4ik837-eng/phone-agent
-- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.1.0/phone-agent.apk
+- Скачать APK: https://github.com/anton4ik837-eng/phone-agent/releases/download/v0.2.0/phone-agent.apk
 
 Android-приложение, которое само является MCP-сервером. OpenCode запускается прямо на устройстве (Termux) и подключается к приложению по `http://127.0.0.1:8765/mcp`. ПК в контуре отсутствует.
 
@@ -37,6 +37,31 @@ Android-приложение, которое само является MCP-се�
 4. На HyperOS и Lenovo дополнительно разреши приложению **автозапуск** и отключи оптимизацию батареи, иначе систему может убить фоновый процесс.
 
 Проверка: в приложении должно быть `MCP: http://127.0.0.1:8765/mcp (работает)`.
+
+## Как дать команду (без Termux)
+
+В приложении есть блок «ЧАТ С OPENCODE»:
+
+1. В Termux один раз запустить `opencode serve` — он напечатает адрес (обычно `http://127.0.0.1:4096`) и пароль. Вписать их в поля приложения.
+2. Нажать «Подключиться / новая сессия».
+3. Печатать команды в поле «Напиши команду» и нажимать «ОТПРАВИТЬ». Ответ агента появится ниже. Кнопки «Экран», «Уведомления», «Telegram» — быстрые шаблоны.
+4. Кнопка «Все нужные команды и примеры» показывает полный список прямо в чате.
+
+Termux после этого нужен только для того, чтобы держать запущенным `opencode serve`.
+
+## Все нужные команды
+
+```sh
+# 1. Termux из F-Droid или GitHub releases (не из Play Store)
+curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-setup.sh | bash
+pkg install opencode
+mkdir -p ~/.config/opencode
+curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json
+opencode mcp list      # должно быть: phone connected
+opencode serve         # адрес и пароль вписать в приложение
+```
+
+Примеры команд агенту: «Посмотри, что на экране», «Прочитай уведомления», «Открой Telegram и скажи, что видишь», «Сделай скриншот», «Открой Gmail и найди письмо от ...», «Подготовь SMS для номера ...».
 
 ## Установка OpenCode на устройстве
 

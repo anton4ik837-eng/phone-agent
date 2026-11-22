@@ -6,12 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputType
 import android.view.Gravity
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -20,15 +21,21 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var log: TextView
+    private lateinit var chat: TextView
+    private lateinit var commandInput: EditText
+    private lateinit var serverInput: EditText
+    private lateinit var passwordInput: EditText
     private lateinit var prefs: SharedPreferences
+    private var sessionId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("phone_agent", MODE_PRIVATE)
+        sessionId = prefs.getString("oc_session", null)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         status = TextView(this).apply { textSize = 16f; setPadding(24, 24, 24, 12) }
-        log = TextView(this).apply { textSize = 12f; setPadding(24, 12, 24, 24) }
+        log = TextView(this).apply { textSize = 12f; setPadding(24, 12, 24, 12) }
 
         root.addView(status)
         root.addView(button("Включить доступность (обязательно)") { markAndOpen("asked_acc") { openAccessibilitySettings() } })
@@ -37,7 +44,7 @@ class MainActivity : Activity() {
         root.addView(button("Запустить MCP-сервер") {
             McpServer.start(this)
             refresh()
-            toast("MCP-сервер: http://127.0.0.1:8765/mcp")
+            toast("MCP: http://127.0.0.1:8765/mcp")
         })
         root.addView(button("Повторить автонастройку") {
             prefs.edit()
@@ -48,11 +55,39 @@ class MainActivity : Activity() {
                 .apply()
             autoAdvance()
         })
-        root.addView(button("Проверить инструменты") {
-            val count = McpServer.toolNames().size
-            appendLog("Инструментов: $count")
-            toast("Инструментов: $count")
-        })
+
+        root.addView(section("ЧАТ С OPENCODE"))
+        serverInput = EditText(this).apply {
+            hint = "Адрес OpenCode (по умолчанию http://127.0.0.1:4096)"
+            setText(prefs.getString("oc_url", "http://127.0.0.1:4096"))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+        passwordInput = EditText(this).apply {
+            hint = "Пароль от opencode serve (если есть)"
+            setText(prefs.getString("oc_password", ""))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        root.addView(serverInput)
+        root.addView(passwordInput)
+        root.addView(button("Подключиться / новая сессия") { connect() })
+        root.addView(button("Все нужные команды и примеры") { appendChat(COMMANDS) })
+
+        val quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        quick.addView(button("Экран") { sendCommand("Посмотри, что сейчас на экране, и опиши") })
+        quick.addView(button("Уведомления") { sendCommand("Прочитай активные уведомления") })
+        quick.addView(button("Telegram") { sendCommand("Открой Telegram и скажи, что видишь") })
+        root.addView(quick)
+
+        commandInput = EditText(this).apply {
+            hint = "Напиши команду для OpenCode..."
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        root.addView(commandInput)
+        root.addView(button("ОТПРАВИТЬ") { sendCommand(commandInput.text.toString()) })
+        chat = TextView(this).apply { textSize = 13f; setPadding(24, 12, 24, 24) }
+        root.addView(chat)
+        root.addView(button("Очистить чат") { chat.text = "" })
+        root.addView(log)
         root.addView(button("Очистить лог") { log.text = "" })
 
         setContentView(ScrollView(this).apply { addView(root) })
@@ -68,10 +103,66 @@ class MainActivity : Activity() {
         if (intent.getBooleanExtra("from_boot", false)) appendLog("Запуск после перезагрузки")
     }
 
+    private fun section(text: String) = TextView(this).apply {
+        this.text = "—— $text ——"
+        textSize = 15f
+        setPadding(24, 20, 24, 4)
+    }
+
     private fun button(text: String, click: () -> Unit): Button = Button(this).apply {
         this.text = text
         isAllCaps = false
         setOnClickListener { click() }
+    }
+
+    private fun client(): OpenCodeClient {
+        val url = serverInput.text.toString().ifBlank { "http://127.0.0.1:4096" }
+        val password = passwordInput.text.toString()
+        prefs.edit().putString("oc_url", url).putString("oc_password", password).apply()
+        return OpenCodeClient(url, password)
+    }
+
+    private fun connect() {
+        appendChat("Подключение к OpenCode...")
+        Thread {
+            try {
+                val result = client().check()
+                val sid = client().createSession()
+                sessionId = sid
+                prefs.edit().putString("oc_session", sid).apply()
+                runOnUiThread {
+                    appendChat("$result. Новая сессия создана. Пиши команду ниже.")
+                    toast("OpenCode подключён")
+                }
+            } catch (t: Throwable) {
+                runOnUiThread { appendChat("Не удалось подключиться: ${t.message}\nЗапусти в Termux: opencode serve") }
+            }
+        }.start()
+    }
+
+    private fun sendCommand(text: String) {
+        if (text.isBlank()) return
+        appendChat("Ты: $text")
+        commandInput.setText("")
+        Thread {
+            try {
+                val currentClient = client()
+                val sid = sessionId ?: currentClient.createSession().also { newId ->
+                    sessionId = newId
+                    prefs.edit().putString("oc_session", newId).apply()
+                }
+                val answer = currentClient.prompt(sid, text)
+                runOnUiThread { appendChat("OpenCode: $answer") }
+            } catch (t: Throwable) {
+                runOnUiThread { appendChat("Ошибка: ${t.message}") }
+            }
+        }.start()
+    }
+
+    private fun appendChat(line: String) {
+        chat.append(line + "\n\n")
+        val scroll = chat.parent?.parent as? ScrollView
+        scroll?.post { scroll.fullScroll(Gravity.BOTTOM) }
     }
 
     private fun markAndOpen(key: String, action: () -> Unit) {
@@ -85,9 +176,8 @@ class MainActivity : Activity() {
         autoAdvance()
     }
 
-    /** Opens the required system settings one by one. Android does not allow granting
-     *  accessibility / notification / MediaProjection access programmatically without root,
-     *  so the user only has to flip the toggles — the app advances by itself. */
+    /** The app cannot grant system-protected permissions without root, but it opens
+     *  the required screens one by one and advances as soon as each is granted. */
     private fun autoAdvance() {
         if (!prefs.getBoolean("setup_active", true)) return
         when {
@@ -96,7 +186,7 @@ class MainActivity : Activity() {
                 appendLog("Автонастройка: шаг 1/3 — доступность")
                 openAccessibilitySettings()
             }
-            !accessibilityEnabled() -> Unit // user has seen the screen, waiting for the toggle
+            !accessibilityEnabled() -> Unit
             !notificationsEnabled() && !prefs.getBoolean("asked_notif", false) -> {
                 prefs.edit().putBoolean("asked_notif", true).apply()
                 appendLog("Автонастройка: шаг 2/3 — уведомления")
@@ -137,19 +227,13 @@ class MainActivity : Activity() {
     }
 
     private fun openNotificationSettings() {
-        try {
-            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-        } catch (_: Throwable) {
-            startActivity(Intent(Settings.ACTION_SETTINGS))
-        }
+        try { startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) }
+        catch (_: Throwable) { startActivity(Intent(Settings.ACTION_SETTINGS)) }
     }
 
     private fun requestScreenCapture() {
         val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
-        if (manager == null) {
-            toast("MediaProjection недоступен")
-            return
-        }
+        if (manager == null) { toast("MediaProjection недоступен"); return }
         @Suppress("DEPRECATION")
         startActivityForResult(manager.createScreenCaptureIntent(), 42)
     }
@@ -189,15 +273,40 @@ class MainActivity : Activity() {
             appendLine("Скриншоты: ${if (ScreenCaptureHolder.permissionIntent != null) "РАЗРЕШЕНЫ" else "НЕТ"}")
             appendLine("MCP: http://127.0.0.1:8765/mcp (${if (McpServer.isRunning()) "работает" else "остановлен"})")
             appendLine()
-            appendLine("Termux → opencode → mcp.servers.phone → http://127.0.0.1:8765/mcp")
+            appendLine("Команда пишется в поле «Напиши команду» ниже — Termux не нужен.")
         }
     }
 
     private fun appendLog(line: String) {
         log.append("[${java.text.SimpleDateFormat("HH:mm:ss").format(java.util.Date())}] $line\n")
-        val sc = log.parent?.parent as? ScrollView
-        sc?.post { sc.fullScroll(Gravity.BOTTOM) }
+        val scroll = log.parent?.parent as? ScrollView
+        scroll?.post { scroll.fullScroll(Gravity.BOTTOM) }
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+    companion object {
+        private const val COMMANDS = """ВСЕ НУЖНЫЕ КОМАНДЫ
+
+Termux (один раз, если ещё не установлен OpenCode):
+1. Установить Termux из F-Droid или GitHub releases (не из Play Store).
+2. curl -fsSL https://raw.githubusercontent.com/bd-loser/opencode-bionic/main/repo-setup.sh | bash
+3. pkg install opencode
+4. mkdir -p ~/.config/opencode
+5. curl -fsSL https://raw.githubusercontent.com/anton4ik837-eng/phone-agent/main/phone-opencode.json -o ~/.config/opencode/opencode.json
+6. opencode mcp list   -> должно быть: phone connected
+7. opencode serve      -> напечатает адрес и пароль, впиши их в поля выше
+
+ПРИМЕРЫ КОМАНД ДЛЯ OPENCODE:
+- Посмотри, что сейчас на экране, и опиши.
+- Прочитай активные уведомления.
+- Открой Telegram и скажи, что видишь.
+- Сделай скриншот и сохрани его.
+- Открой Gmail и найди письмо от ...
+- Набери номер ... в SMS и подготовь сообщение.
+
+Инструменты агента: ui_dump, ui_tap, ui_swipe, ui_type, ui_key, open_app,
+open_uri, sms_compose, notifications, battery, device_info, clipboard_set,
+wait_ms, screenshot."""
+    }
 }
